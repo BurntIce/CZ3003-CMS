@@ -23,13 +23,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '(f_nc#44!)@th(&dn%%kriqh6rc-$_9=11=ln@=$ra+(qzn5p9'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-PROD = os.getenv('PROD', False)
+PROD = os.getenv('PROD', True)
 if PROD:
     DEBUG = False
 else:
     DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['3.1.194.234', '127.0.0.1', 'localhost']
 
 
 # Application definition
@@ -127,7 +127,3 @@ USE_TZ = True
 STATIC_URL = '/static/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
-
-
-
-CSRF_COOKIE_SECURE = True
