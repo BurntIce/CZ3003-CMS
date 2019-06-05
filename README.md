@@ -1,4 +1,4 @@
-# SASDCMS
+# Crisis Management System
 This project is done in AY2018-19 S2 for NTU SCSE CZ3003 Software Systems Analysis and Design.
 
 # How to use xD (for Windows)
