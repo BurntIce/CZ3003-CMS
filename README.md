@@ -1,4 +1,6 @@
 # SASDCMS
+This project is done in AY2018-19 S2 for NTU SCSE CZ3003 Software Systems Analysis and Design.
+
 # How to use xD (for Windows)
 1. Install virtualenv (pip install virtualenv)
 2. Create virtualenv (virtualenv venv) 
