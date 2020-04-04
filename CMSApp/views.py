@@ -1,5 +1,6 @@
-import json
+import json, pytz, datetime
 import urllib.request as ur
+import pyrebase
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect
@@ -10,13 +11,13 @@ from CMSApp.models import Report, CivilianData
 from apis.latitudelongitude import get_latlng
 from apis.sms_django import SMSAPI
 from apis.email_django import EmailSend
-from .forms import CivilianForm 
+from .forms import CivilianForm
 
-
+tz = pytz.timezone('Asia/Singapore')
 # Create your views here.
-
 def home(request):
-    report_list = Report.objects.all().filter().order_by("time")[:5:-1]
+    report_list = Report.objects.all().filter().order_by("time")[::-1]
+    report_list = report_list[0:min(len(report_list), 20)]
     try:
         postal = request.GET["postal"]
         center = get_latlng(postal)
@@ -24,13 +25,15 @@ def home(request):
         center = -1
     center = json.dumps(center)
     markers = []
-    data = get_server_data()
+    try:
+        data = get_server_data()
+    except:
+        data = {}
     haze = get_haze_data(data)
-    print(haze)
     dengue = get_dengue_data(data)
     cds = get_cd_shelter(data)
     for report in report_list:
-        markers.append({"name" : report.name, "latlng" : get_latlng(report.postal_code), "type": report.type})
+        markers.append({"name" : report.name, "latlng" : {"lat": report.lat, "lng": report.lng}, "type": report.type})
     markers = json.dumps(markers)
 
     return render(request,"CMSApp/home.html", {'report_list' : report_list, 'center' : center, 'markers' : markers, 'haze': haze, 'dengue':dengue, 'cds': cds})
@@ -49,6 +52,14 @@ def input(request):
             postal = request.POST["postal"]
             desc = request.POST["description"]
             unit = request.POST["unit"]
+            latlng = get_latlng(postal)
+            lat = latlng["lat"]
+            lng = latlng["lng"]
+            #Saving to database in Django
+            new_report = Report(name=name, mobile=mobile, location=location, type=type1, postal_code=postal, lat = lat, lng = lng, description=desc, unit_number=unit)
+            new_report.save()
+
+            # SMS
             django_dict = {}
             django_dict["Type"] = str(type1)
             django_dict["mobile"] = str(mobile)
@@ -56,9 +67,6 @@ def input(request):
             django_dict["postal"] = str(postal)
             django_dict["Description"] = str(desc)
             django_dict["name"] = str(name)
-            #Saving to database in Django
-            new_report = Report(name=name, mobile=mobile, location=location, type=type1, postal_code=postal, description=desc, unit_number=unit)
-            new_report.save()
             #Sending SMS to Agency
             sender = "+12052939421"
             receiverAgency = ['+6596579895']
@@ -81,23 +89,28 @@ def archive(request):
 
 
 def get_server_data():
-    url = 'https://api-scheduler.herokuapp.com/'
-    url_parser = ur.urlopen(ur.Request(url))
-    info = url_parser.read()
-    json_dict = json.loads(info.decode('utf-8'))
-    return json_dict
+    config = {
+          "apiKey": "",
+          "authDomain": "",
+          "databaseURL": "https://data-storage-1205f.firebaseio.com/",
+          "storageBucket": ""
+        }
+    firebase = pyrebase.initialize_app(config)
+    db = firebase.database()
+    dict_data = dict(db.get().val())
+    return dict_data
 
 def get_cd_shelter(dict):
     if dict=={}:
         return {}
     else:
-        return dict["data_cdshelter"]
+        return dict["CD_Data"]["Data"]
 
 def get_haze_data(dict):
     if dict=={}:
         return {"location":{}, "psi":{}, "pm25":{}}
     else:
-        haze = dict["data_haze"]
+        haze = dict["Haze_Data"]
         haze_template = {}
         for key, value in haze["location"].items():
             haze_template[key] = {}
@@ -112,7 +125,7 @@ def get_dengue_data(dict):
     if dict=={}:
         return {}
     else:
-        return dict["data_dengue"]
+        return dict["Dengue_Data"]['polygon_data']
 
 @login_required
 def manage_public(request):
@@ -141,6 +154,14 @@ def del_public(request, civ_pk):
     else:
         return render(request, "CMSApp/del_civ.html", {'civ' : civ_data})
 
+@login_required
+def resolve(request, report_pk):
+    report = get_object_or_404(Report, pk=report_pk)
+    report.resolved = True
+    report.resolve_time = datetime.datetime.now(tz=tz)
+    report.save()
+    return HttpResponseRedirect(reverse('CMSApp:detail', kwargs={'report_pk':report_pk}))
+
 # reference: https://stackoverflow.com/questions/311188/how-do-i-edit-and-delete-data-in-django
 # possible better alternative: CivilianData._do_update
 # possible better alternative: civ.update_civ_data()
@@ -150,8 +171,8 @@ def update_public(request, civ_pk):
     # following code runs if no exception
     if request.method == "POST":
         form = CivilianForm(request.POST, instance=civ_data)
-        print(request.POST["name"])
-        print(form)
+        #print(request.POST["name"])
+        #print(form)
         if form.is_valid():
             form.save()
             return HttpResponseRedirect(reverse('CMSApp:manage'))
@@ -167,7 +188,7 @@ def mass_message(request):
     if request.method == "POST":
         #Send a mass Email out
         subject = request.POST["subject"]
-        message = request.POST["messge"]
+        message = request.POST["message"]
         region = request.POST["region"]
         region_civ_data = CivilianData.objects.filter(region__exact=region)
         server = EmailSend.startServer()
@@ -175,9 +196,10 @@ def mass_message(request):
         for people in region_civ_data:
             #send email to people.email using subject and message
             try:
-                mail.send_email(server, people.email,message,subject)
+                mail.send_email(server, [people.email],message,subject)
             except:
                 continue
+        EmailSend.quitServer(server)
         return HttpResponseRedirect(reverse('CMSApp:home'))
     else:
         return render(request, "CMSApp/mass_message.html", {})
