@@ -1,5 +1,11 @@
 # Crisis Management System
-This project is done in AY2018-19 S2 for NTU SCSE CZ3003 Software Systems Analysis and Design.
+
+Nanyang Technological University  
+School of Computer Science and Engineering
+
+Academic Year 2018-2019 Semester 2
+
+source code for  CZ3003 Software Systems Analysis and Design project
 
 # How to use xD (for Windows)
 1. Install virtualenv (pip install virtualenv)
